@@ -29,12 +29,12 @@ const int MOTORDIR = 12;     // Motor direction pin number
 /*
  * Define Fixed Variables
  */
-const int HOODOPENEDVALUE = 205; // Analogue potentiometer value when hood is open
-const int HOODCLOSEDVALUE = 905; // Analogue potentiometer value when hood is closed
-const int HOODPOSTOLERANCE = 20; // Analogue potentiometer value tolerance
-const int TILTDURATION = 25;     // Time (ms) to run the motor for a single hood tilt
+const int HOODOPENEDVALUE = 200; // Analogue potentiometer value when hood is open
+const int HOODCLOSEDVALUE = 910; // Analogue potentiometer value when hood is closed
+const int HOODPOSTOLERANCE = 10; // Analogue potentiometer value tolerance
+const int TILTDURATION = 15;     // Time (ms) to run the motor for a single hood tilt
 const int BUTTONDELAY = 400;     // Minimum time between button presses
-const int ACCDETECTDELAY = 2000; // Time (ms) that ACC needs to be on before car is considered 'on'
+const int ACCDETECTDELAY = 5000; // Time (ms) that ACC needs to be on before car is considered 'on'
 const int MAXTILT = 2;           // Max hood tilt level
 const int MAXPOWERTIME = 3000;   // Define the Max Power Time for the arduino, when ACC is dropped, this is the max time until the power relay changes state.
 
@@ -57,6 +57,8 @@ unsigned long onTime;                   // Time since the Ardino has been on
  */
 void setup()
 {
+  pinMode(13, OUTPUT);
+  pinMode(13, LOW);
   // Setup the input pins
   pinMode(OPENPIN, INPUT);       // Set the pushbutton pin as an input:
   pinMode(TILTPIN, INPUT);       // Set the TILTPIN as an input:
@@ -112,7 +114,6 @@ void checkResume()
     delay(ACCDETECTDELAY); // Wait a ACCDETECTDELAY time
     if (digitalRead(ACCPIN) == HIGH)
     {                                // Check to see if Accessories are still on
-      digitalWrite(BTNENABLE, HIGH); // Enable buttons and illumination
       if (onHoodStatus == HOODOPENED)
       {
         operateHood(OPEN, false); // Restore the previous hood position
@@ -184,7 +185,6 @@ void checkOff()
     { // Hood is open, close it
       operateHood(CLOSE, false);
     }
-    digitalWrite(BTNENABLE, LOW);
     carOff = true;
     carOffTime += 2;
   }
@@ -195,7 +195,7 @@ void checkOff()
  */
 void checkCarOffTime()
 {
-  if (carOffTime == 100)
+  if (carOffTime == 50)
   {
     sleepNow(); // Make the Arduino go into sleep mode
   }
@@ -243,7 +243,7 @@ void operateHood(bool dir, bool tilt)
       digitalWrite(MOTORDIRBACK, LOW);
       digitalWrite(MOTORDIR, HIGH);    // Set motor drive direction to open
       digitalWrite(MOTORENABLE, HIGH); // Enable the motor
-      while (analogRead(A5) > HOODOPENEDVALUE && motorRunTime < 30)
+      while (analogRead(A5) > HOODOPENEDVALUE && motorRunTime < 35)
       { // Run until we're fully open. If it's run for over 3s stop
         delay(100);
         motorRunTime++;
@@ -260,7 +260,7 @@ void operateHood(bool dir, bool tilt)
       digitalWrite(MOTORDIR, LOW); // Set motor drive direction to close
       digitalWrite(MOTORDIRBACK, HIGH);
       digitalWrite(MOTORENABLE, HIGH); // Enable the motor
-      while (analogRead(A5) < HOODCLOSEDVALUE && motorRunTime < 30)
+      while (analogRead(A5) < HOODCLOSEDVALUE && motorRunTime < 35)
       { // Run until we're fully closed. If it's run for over 3s stop
         delay(100);
         motorRunTime++;
@@ -279,6 +279,7 @@ void operateHood(bool dir, bool tilt)
 void sleepNow()
 {
   Serial.println("Entering sleep mode");
+  digitalWrite(BTNENABLE, LOW);
   delay(100);
   set_sleep_mode(SLEEP_MODE_PWR_DOWN); // Set type of sleep mode
   sleep_enable();                      // Enable sleep mode
@@ -288,6 +289,7 @@ void sleepNow()
   detachInterrupt(0);
   delay(100);
   Serial.println("Resuming from Sleep");
+  digitalWrite(BTNENABLE, HIGH); // Enable the buttons and illumination
 }
 
 /*
@@ -296,5 +298,4 @@ void sleepNow()
  */
 void wakeUp()
 {
-  digitalWrite(BTNENABLE, HIGH); // Enable the buttons and illumination
 }
