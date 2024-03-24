@@ -61,9 +61,6 @@ unsigned long onTime;                   // Time since the Ardino has been on
  */
 void setup()
 {
-  pinMode(mode0, OUTPUT);
-  pinMode(mode1, OUTPUT);
-  pinMode(ssPin, OUTPUT);
   // Setup the input pins
   pinMode(OPENPIN, INPUT);       // Set the pushbutton pin as an input:
   pinMode(TILTPIN, INPUT);       // Set the TILTPIN as an input:
