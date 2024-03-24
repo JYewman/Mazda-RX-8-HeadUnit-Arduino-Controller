@@ -95,17 +95,13 @@ void loop()
     checkOpenButton(); // Check if the Open button has been pressed
     checkTiltButton(); // Check if the Tilt button has been pressed
   }
+  else if (carOff) // Accessories are off (car off)
+  {
+    checkCarOffTime();
+  }
   else
-  { // Accessories are off (car off)
-    if (carOff)
-    {
-      // Serial.println("Car off time" + carOffTime);
-      checkCarOffTime();
-    }
-    else
-    {
-      checkOff();
-    }
+  {
+    checkOff();
   }
 }
 
@@ -239,42 +235,40 @@ void operateHood(bool dir, bool tilt)
     delay(TILTDURATION);             // Keep motor running for TILTDURATION
     digitalWrite(MOTORENABLE, LOW);  // Stop the motor
   }
-  else
+  else if (dir)
   {
-    if (dir)
-    { // If direction is OPEN
-      String debugString = "Opening hood, potentiometer: ";
-      Serial.println(debugString + analogRead(A5));
-      digitalWrite(MOTORDIRBACK, LOW);
-      digitalWrite(MOTORDIR, HIGH);    // Set motor drive direction to open
-      digitalWrite(MOTORENABLE, HIGH); // Enable the motor
-      while (analogRead(A5) > HOODOPENEDVALUE && motorRunTime < 35)
-      { // Run until we're fully open. If it's run for over 3s stop
-        delay(100);
-        motorRunTime++;
-      }
-      digitalWrite(MOTORENABLE, LOW); // Stop the motor
-      motorRunTime = 0;
-      currentHoodStatus = HOODOPENED;
-      Serial.println("Done: Hood Open");
+    // If direction is OPEN
+    String debugString = "Opening hood, potentiometer: ";
+    Serial.println(debugString + analogRead(A5));
+    digitalWrite(MOTORDIRBACK, LOW);
+    digitalWrite(MOTORDIR, HIGH);    // Set motor drive direction to open
+    digitalWrite(MOTORENABLE, HIGH); // Enable the motor
+    while (analogRead(A5) > HOODOPENEDVALUE && motorRunTime < 35)
+    { // Run until we're fully open. If it's run for over 3s stop
+      delay(100);
+      motorRunTime++;
     }
-    else
-    { // If direction is CLOSE
-      String debugString = "Closing hood, potentiometer: ";
-      Serial.println(debugString + analogRead(A5));
-      digitalWrite(MOTORDIR, LOW); // Set motor drive direction to close
-      digitalWrite(MOTORDIRBACK, HIGH);
-      digitalWrite(MOTORENABLE, HIGH); // Enable the motor
-      while (analogRead(A5) < HOODCLOSEDVALUE && motorRunTime < 35)
-      { // Run until we're fully closed. If it's run for over 3s stop
-        delay(100);
-        motorRunTime++;
-      }
-      digitalWrite(MOTORENABLE, LOW); // Stop the motor
-      motorRunTime = 0;
-      currentHoodStatus = HOODCLOSED;
-      Serial.println("Done: Hood Close");
+    digitalWrite(MOTORENABLE, LOW); // Stop the motor
+    motorRunTime = 0;
+    currentHoodStatus = HOODOPENED;
+    Serial.println("Done: Hood Open");
+  }
+  else
+  { // If direction is CLOSE
+    String debugString = "Closing hood, potentiometer: ";
+    Serial.println(debugString + analogRead(A5));
+    digitalWrite(MOTORDIR, LOW); // Set motor drive direction to close
+    digitalWrite(MOTORDIRBACK, HIGH);
+    digitalWrite(MOTORENABLE, HIGH); // Enable the motor
+    while (analogRead(A5) < HOODCLOSEDVALUE && motorRunTime < 35)
+    { // Run until we're fully closed. If it's run for over 3s stop
+      delay(100);
+      motorRunTime++;
     }
+    digitalWrite(MOTORENABLE, LOW); // Stop the motor
+    motorRunTime = 0;
+    currentHoodStatus = HOODCLOSED;
+    Serial.println("Done: Hood Close");
   }
 }
 
