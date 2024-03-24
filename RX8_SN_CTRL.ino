@@ -8,8 +8,12 @@
  * GNU GPLv3
  */
 
+// Define the sleep library
 #include <avr/sleep.h>
 
+/*
+ * Define boolean fixed vars
+ */
 const bool OPEN = true;
 const bool CLOSE = false;
 const bool HOODOPENED = true;
@@ -18,13 +22,13 @@ const bool HOODCLOSED = false;
 /*
  * Define Pin Usage
  */
-const int ACCPIN = 2;        // ACC pin number
-const int MOTORENABLE = 3;   // Motor enable pin number
-const int TILTPIN = 4;       // Tilt button pin number
-const int OPENPIN = 6;       // Open/close button pin number
-const int MOTORDIRBACK = 10; // Motor direction pin number
-const int BTNENABLE = 11;    // Enable control buttons & button illumination
-const int MOTORDIR = 12;     // Motor direction pin number
+const int ACCPIN = 2;       // ACC pin number
+const int MOTORENABLE = 3;  // Motor enable pin number
+const int TILTPIN = 4;      // Tilt button pin number
+const int OPENPIN = 5;      // Open/close button pin number (WAS PIN 6)
+const int MOTORDIRBACK = 6; // Motor direction pin number (WAS PIN 10)
+const int BTNENABLE = 7;    // Enable control buttons & button illumination (WAS PIN 11)
+const int MOTORDIR = 8;     // Motor direction pin number  (WAS PIN 12)
 
 /*
  * Define Fixed Variables
@@ -57,8 +61,9 @@ unsigned long onTime;                   // Time since the Ardino has been on
  */
 void setup()
 {
-  pinMode(13, OUTPUT);
-  pinMode(13, LOW);
+  pinMode(mode0, OUTPUT);
+  pinMode(mode1, OUTPUT);
+  pinMode(ssPin, OUTPUT);
   // Setup the input pins
   pinMode(OPENPIN, INPUT);       // Set the pushbutton pin as an input:
   pinMode(TILTPIN, INPUT);       // Set the TILTPIN as an input:
@@ -113,7 +118,7 @@ void checkResume()
   {                        // Only run if car off
     delay(ACCDETECTDELAY); // Wait a ACCDETECTDELAY time
     if (digitalRead(ACCPIN) == HIGH)
-    {                                // Check to see if Accessories are still on
+    { // Check to see if Accessories are still on
       if (onHoodStatus == HOODOPENED)
       {
         operateHood(OPEN, false); // Restore the previous hood position
