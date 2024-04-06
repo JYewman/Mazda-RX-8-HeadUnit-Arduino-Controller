@@ -31,7 +31,7 @@ void loop()
     {                       // if full command is ready
         detachInterrupt(0); // don't want interrupt firing when trying to send data
         if (buff == 0x08)
-        { // Anybody home?
+        { // Check if Tape/MD has been called
             delay(10);
             // Power on notification
             sendNibble(0x8); // for head unit
@@ -49,11 +49,11 @@ void loop()
             sendNibble(0x0); // data
             sendNibble(0xC); // data
             sendNibble(0x3); // checksum
-            Serial.println("AnybodyHome?");
+            Serial.println("Tape/MD Check");
         }
 
         else if (buff == 0x09)
-        { // Wake up
+        { // Init Tape/MD
             delay(10);
             // Casette present
             sendNibble(0x8); // for head unit
@@ -83,7 +83,7 @@ void loop()
             sendNibble(0x0); // data
             sendNibble(0x1); // data
             sendNibble(0x0); // checksum
-            Serial.println("Wake Up");
+            Serial.println("Init Tape/MD");
         }
         else if (buff == 0x01)
         { // Some control command
@@ -105,7 +105,7 @@ void loop()
             sendNibble(0x0); // data
             sendNibble(0x1); // data
             sendNibble(0x0); // checksum
-            Serial.println("Control");
+            Serial.println("Control command");
         }
         else
         {
