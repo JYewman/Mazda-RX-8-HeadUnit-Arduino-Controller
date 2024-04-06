@@ -1,3 +1,13 @@
+/*
+ * Arduino Mazda RX-8 Head Unit Controller
+ *
+ * Copyright (c) 2024 Joshua Yewman
+ *
+ * Arduino based Mazda RX-8 Auxillary control via TAPE/MD port
+ *
+ * GNU GPLv3
+ */
+
 #define DATA_PIN 2
 
 volatile uint8_t buff = 0;           // we only need the first 2 nibbles of any given message
