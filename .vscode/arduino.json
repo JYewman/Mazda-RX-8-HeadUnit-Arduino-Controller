@@ -1,6 +1,6 @@
 {
     "board": "arduino:avr:uno",
     "programmer": "avrispmkii",
-    "sketch": "RX8_SN_CTRL\\RX8_SN_CTRL.ino",
+    "sketch": "RX8_HU_CTRL\\RX8_HU_CTRL.ino",
     "port": "COM3"
 }
