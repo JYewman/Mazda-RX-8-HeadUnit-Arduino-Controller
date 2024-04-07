@@ -4,11 +4,11 @@
 
 This project is designed to control the motorized hood on the Mazda RX-8 SatNav screen as well as provide auxillary (aux) input and custom LCD text to the existing RX-8 head unit. This project is designed to replace the SatNav hood controller as well as provide an add on control unit for the auxillary input and LCD text display.
 
-The reason this project exist is simple, the RX-8 is a classic, but it's SatNav and Head Unit is showing it's age. This project allows you to remove the original components of the Sat Nav, add a tablet (or Raspberry Pi running OpenAuto Pro) and still keep the functionality of the motorized tilt. The project also allows you to add a much needed (and cheap) aux input to head units (primarally with firmware version 10.1).
+The reason this project exist is simple, the RX-8 is a classic, but it's SatNav and Head Unit is showing it's age. This project allows you to remove the original components of the Sat Nav, add a tablet (or Raspberry Pi running OpenAuto Pro) and still keep the functionality of the motorized tilt. The project also allows you to add a much needed (and cheap) aux input to head units (primarily with firmware version 10.1).
 
 You can pick and choose components out of this project. The SatNav screen controller can work as a standalone unit, so can the aux input system. You don't need to incorporate the LCD control either if you don't want.
 
-The Arduino's do communicate with eachother, this allows for some cool LCD display functions as well as future functionality.
+The Arduino's can communicate with each other, this allows for some cool LCD display functions as well as future functionality.
 
 <!-- GETTING STARTED -->
 ## Getting Started
@@ -28,7 +28,14 @@ Here is a list of both software and hardware you need to get the project running
 
 To compile and deploy the code, you will need the Arduino IDE or the Arduino Compiler. As this code is designed to be run on an Arduino Uno, all the code is set up to compile directly to the Uno.
 
-This project uses the AVR_SLEEP library to enable the Arduino to enter deep sleep to conserve your car's battery power when you turn your car off. When the Arduino enters deep sleep, your car battery will provide approximately 2 months of power. **I AM NOT RESPONSIBLE FOR YOUR BATTERY DYING!** If you plan to not use your car for a few months, it's recommended you disconnect the battery anyway, but I would at least recommend you disconnect the Arduino to conserve even more battery power. Your car will use power anyway, but the Arduino only consumes approximately 0.5mA. 
+This project uses the AVR_SLEEP library to enable the Arduino to enter deep sleep to conserve your car's battery power when you turn your car off. When the Arduino enters deep sleep, your car battery will provide approximately 2 months of power. **I AM NOT RESPONSIBLE FOR YOUR BATTERY DYING!** If you plan to not use your car for a few months, it's recommended you disconnect the battery anyway, but I would at least recommend you disconnect the Arduino to conserve even more battery power. Your car will use power anyway, but the Arduino only consumes approximately 0.5mA.
+
+### Do's, Don'ts and issues
+I don't recommend running the Arduino on the car's BAT VCC as +-13v is quite a lot for the onboard 5v regulator on the Arduino to handle. However, the Arduino *can* handle it, it will get pretty hot though. **Don't run the motor off the Arduino's 5v output rail** it won't provide enough current and you will certainly frazzle the voltage regulator if you are running it from the car's 12v supply.
+
+Another don't is to run the ignition sense from the car's auxillary voltage rail, this is 12v and will kill the Arduino, get a 5v regulator, relay or power it from some other 5v input like the other Arduino (if your using the full setup) or, a Raspberry Pi (if you're using something like OpenAuto Pro).
+
+Another issue you might come across is noise through the speakers, this can be a difficult issue to track down, but it is almost certainly coming from a voltage regulator *somewhere* in the project. Where you can, use ground loop isolators and ground everything to the car's ground rail.
 
 ## Contributing
 
