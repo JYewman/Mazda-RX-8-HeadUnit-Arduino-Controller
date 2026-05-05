@@ -3,96 +3,83 @@
  *
  * Copyright (c) 2024 Joshua Yewman
  *
- * Arduino based Mazda RX-8 SatNav hood tilt control unit. Manages tilt, power-on and sleep tilt.
+ * Arduino based Mazda RX-8 SatNav hood tilt control unit. Manages tilt,
+ * power-on and sleep tilt.
  *
  * GNU GPLv3
  */
 
-// Define the sleep library
 #include <avr/sleep.h>
 
-/*
- * Define boolean fixed vars
- */
-const bool OPEN = true;
+// Hood direction
+const bool OPEN  = true;
 const bool CLOSE = false;
+
+// Hood physical state
 const bool HOODOPENED = true;
 const bool HOODCLOSED = false;
 
 /*
- * Define Pin Usage
+ * Pin assignments
  */
-const int ACCPIN = 2;        // ACC pin number
-const int MOTORENABLE = 3;   // Motor enable pin number
-const int TILTPIN = 4;       // Tilt button pin number
-const int OPENPIN = 6;       // Open/close button pin number (WAS PIN 6)
-const int MOTORDIRBACK = 10; // Motor direction pin number (WAS PIN 10)
-const int BTNENABLE = 11;    // Enable control buttons & button illumination (WAS PIN 11)
-const int MOTORDIR = 12;     // Motor direction pin number  (WAS PIN 12)
+const uint8_t ACCPIN       = 2;   // ACC input (ignition accessory line, PCINT18)
+const uint8_t TILTPIN      = 4;   // Tilt button
+const uint8_t OPENPIN      = 6;   // Open/close button
+const uint8_t MOTORDIRBACK = 10;  // DRV8871 IN2
+const uint8_t BTNENABLE    = 11;  // Button enable + illumination
+const uint8_t MOTORDIR     = 12;  // DRV8871 IN1
+const uint8_t HOODPOSPIN   = A5;  // Hood-position potentiometer
 
 /*
- * Define Fixed Variables
+ * Tunables
  */
-const int HOODOPENEDVALUE = 200; // Analogue potentiometer value when hood is open
-const int HOODCLOSEDVALUE = 910; // Analogue potentiometer value when hood is closed
-const int HOODPOSTOLERANCE = 10; // Analogue potentiometer value tolerance
-const int TILTDURATION = 15;     // Time (ms) to run the motor for a single hood tilt
-const int BUTTONDELAY = 400;     // Minimum time between button presses
-const int ACCDETECTDELAY = 5000; // Time (ms) that ACC needs to be on before car is considered 'on'
-const int MAXTILT = 2;           // Max hood tilt level
-const int MAXPOWERTIME = 3000;   // Define the Max Power Time for the arduino, when ACC is dropped, this is the max time until the power relay changes state.
+const int HOODOPENEDVALUE  = 200;  // Pot reading at fully open
+const int HOODCLOSEDVALUE  = 910;  // Pot reading at fully closed
+const int HOODPOSTOLERANCE = 10;   // Pot reading tolerance
+const int TILTDURATION     = 15;   // Motor run-time per tilt step (ms)
+const int BUTTONDELAY      = 400;  // Min time between button presses (ms)
+const int MAXTILT          = 2;    // Max tilt level
+
+const unsigned long ACCDETECTDELAY     = 5000UL;   // ACC must be stable this long (ms)
+const unsigned long SLEEP_AFTER_OFF_MS = 50000UL;  // Time after car-off before MCU sleeps (ms)
+const int           MOTOR_TIMEOUT_MS   = 3500;     // Motor watchdog (ms)
+const int           MOTOR_POLL_MS      = 100;      // Pot poll interval while motor runs (ms)
 
 /*
- * Define Global Variables
+ * State
  */
-boolean carOff = true;                  // Initialise carOff state
-boolean RPIoff = true;                  // Initalises RPi power state
-boolean onHoodStatus = HOODCLOSED;      // Track desired hood status when car on, controlled by checkOpenButton()
-boolean currentHoodStatus = HOODCLOSED; // Track current physical hood status, controlled by operateHood()
-int openButtonState = 0;                // Initialise openButtonState
-int tiltButtonState = 0;                // Initialise tiltButtonState
-int tiltLevel = 0;                      // Initialise hood tilt level (0:none - 2:tilted
-int carOffTime = 0;                     // Time since ACC off
-int motorRunTime = 0;                   // Time the motor has run for
-unsigned long onTime;                   // Time since the Ardino has been on
+bool carOff             = true;        // Whether the car is currently considered off
+bool onHoodStatus       = HOODCLOSED;  // Desired hood state when car is on
+bool currentHoodStatus  = HOODCLOSED;  // Last known physical hood state
+int  tiltLevel          = 0;           // Current tilt level (0..MAXTILT)
+unsigned long carOffStartMs = 0;       // millis() when car-off was confirmed
 
-/*
- * Setup the Arduino's initial state, runs once on boot or if the device is reset
- */
 void setup()
 {
-  // Setup the input pins
-  pinMode(OPENPIN, INPUT);       // Set the pushbutton pin as an input:
-  pinMode(TILTPIN, INPUT);       // Set the TILTPIN as an input:
-  pinMode(ACCPIN, INPUT);        // Set the ACC pin as an input:
-  pinMode(BTNENABLE, OUTPUT);    // Set the BTN pin as an output;
-  digitalWrite(BTNENABLE, HIGH); // Activeate the pull up for the Buttons
-  digitalWrite(OPENPIN, HIGH);   // Activate the pull up for the Open button pin
-  digitalWrite(TILTPIN, HIGH);   // Activate the pull up for the Tilt button pin
+  pinMode(OPENPIN,   INPUT_PULLUP);
+  pinMode(TILTPIN,   INPUT_PULLUP);
+  pinMode(ACCPIN,    INPUT);            // Externally driven by ACC line
+  pinMode(BTNENABLE, OUTPUT);
+  digitalWrite(BTNENABLE, HIGH);        // Power buttons + illumination
 
-  // Setup the motor control pins as outputs
-  pinMode(MOTORENABLE, OUTPUT);   // Set the motor enable pin as an output
-  pinMode(MOTORDIR, OUTPUT);      // Set the motor control pin1 as an output
-  pinMode(MOTORDIRBACK, OUTPUT);  // Set the motor control pin2 as an output
-  digitalWrite(MOTORENABLE, LOW); // Disable the motor
+  pinMode(MOTORDIR,     OUTPUT);
+  pinMode(MOTORDIRBACK, OUTPUT);
+  digitalWrite(MOTORDIR,     LOW);  // Coast (both IN1/IN2 LOW)
+  digitalWrite(MOTORDIRBACK, LOW);
 
-  // Start serial communication at 9600 bits per second for debugging
   Serial.begin(9600);
-  Serial.println("RX-8 Navhood control running...");
+  Serial.println(F("RX-8 Navhood control running..."));
 }
 
-/*
- * The main function, runs continuously
- */
 void loop()
 {
   if (digitalRead(ACCPIN) == HIGH)
-  {                    // Accessories are on (car on)
-    checkResume();     // Check if the car was previously off
-    checkOpenButton(); // Check if the Open button has been pressed
-    checkTiltButton(); // Check if the Tilt button has been pressed
+  {
+    checkResume();
+    checkOpenButton();
+    checkTiltButton();
   }
-  else if (carOff) // Accessories are off (car off)
+  else if (carOff)
   {
     checkCarOffTime();
   }
@@ -103,195 +90,221 @@ void loop()
 }
 
 /*
- * Check if we are resuming from a 'carOff' event, restore previous hood position
+ * Resuming from a previously-off state. Confirm ACC stays HIGH continuously
+ * for ACCDETECTDELAY, then restore the previous hood position. Bails out
+ * immediately if ACC drops, so a momentary blip doesn't cost 5 seconds.
  */
 void checkResume()
 {
-  if (carOff == true)
-  {                        // Only run if car off
-    delay(ACCDETECTDELAY); // Wait a ACCDETECTDELAY time
-    if (digitalRead(ACCPIN) == HIGH)
-    { // Check to see if Accessories are still on
-      if (onHoodStatus == HOODOPENED)
-      {
-        operateHood(OPEN, false); // Restore the previous hood position
-        restorePosition();
-      }
-      carOff = false;
-      carOffTime = 0;
-    }
+  if (!carOff) return;
+  if (!accStableFor(HIGH, ACCDETECTDELAY)) return;
+
+  if (onHoodStatus == HOODOPENED)
+  {
+    operateHood(OPEN, false);
+    restorePosition();
   }
+  carOff = false;
 }
 
 /*
- * Check if the Open button has been pressed and perform the open action
+ * Open/close button: toggle the hood.
  */
 void checkOpenButton()
 {
-  openButtonState = digitalRead(OPENPIN); // Get the current state of the Open button
-  if (openButtonState == LOW)
-  { // Button has been pressed
-    if (analogRead(A5) < (HOODCLOSEDVALUE - HOODPOSTOLERANCE))
-    { // Hood is open
-      operateHood(CLOSE, false);
-      onHoodStatus = HOODCLOSED;
-    }
-    else
-    { // Hood is closed
-      operateHood(OPEN, false);
-      restorePosition();
-      onHoodStatus = HOODOPENED;
-    }
-    delay(BUTTONDELAY); // A delay so we have time to capture the button release
+  if (digitalRead(OPENPIN) != LOW) return;
+
+  if (analogRead(HOODPOSPIN) < (HOODCLOSEDVALUE - HOODPOSTOLERANCE))
+  {
+    operateHood(CLOSE, false);
+    onHoodStatus = HOODCLOSED;
   }
+  else
+  {
+    operateHood(OPEN, false);
+    restorePosition();
+    onHoodStatus = HOODOPENED;
+  }
+  delay(BUTTONDELAY);
 }
 
 /*
- * Check if the Tilt button has been pressed and perform the tilt action
+ * Tilt button: step the tilt one notch, wrapping back to fully open at MAXTILT.
+ * Only acts if the hood is physically open.
  */
 void checkTiltButton()
 {
-  tiltButtonState = digitalRead(TILTPIN); // Get the current state of the Tilt button
-  if (tiltButtonState == LOW)
-  { // Button has been pressed
-    if (currentHoodStatus == HOODOPENED)
-    { // Hood is currently physically open
-      if (tiltLevel == MAXTILT)
-      { // If at max tilt, return to fully opened
-        operateHood(OPEN, false);
-        tiltLevel = 0;
-      }
-      else
-      { // Otherwise, tilt it
-        operateHood(CLOSE, true);
-        tiltLevel++;
-      }
-      delay(BUTTONDELAY); // A delay so we have time to capture the button release
-    }
+  if (digitalRead(TILTPIN) != LOW) return;
+  if (currentHoodStatus != HOODOPENED) return;
+
+  if (tiltLevel >= MAXTILT)
+  {
+    operateHood(OPEN, false);
+    tiltLevel = 0;
   }
+  else
+  {
+    operateHood(CLOSE, true);
+    tiltLevel++;
+  }
+  delay(BUTTONDELAY);
 }
 
 /*
- * Check if the car is off and closes the hood
+ * Confirm ACC has been LOW continuously for ACCDETECTDELAY, then close the
+ * hood and start the off-timer.
  */
 void checkOff()
 {
-  delay(ACCDETECTDELAY); // Wait a ACCDETECTDELAY time
-  if (digitalRead(ACCPIN) == LOW)
-  { // Check if Accessories is still off
-    if (analogRead(A5) < (HOODCLOSEDVALUE - HOODPOSTOLERANCE))
-    { // Hood is open, close it
-      operateHood(CLOSE, false);
-    }
-    carOff = true;
-    carOffTime += 2;
+  if (!accStableFor(LOW, ACCDETECTDELAY)) return;
+
+  if (analogRead(HOODPOSPIN) < (HOODCLOSEDVALUE - HOODPOSTOLERANCE))
+  {
+    operateHood(CLOSE, false);
   }
+  carOff = true;
+  carOffStartMs = millis();
 }
 
 /*
- * Check how long the car has been off and puts the Arduino to sleep
+ * Once the car has been off for SLEEP_AFTER_OFF_MS, put the MCU to sleep.
  */
 void checkCarOffTime()
 {
-  if (carOffTime == 50)
+  const unsigned long elapsed = millis() - carOffStartMs;
+  if (elapsed >= SLEEP_AFTER_OFF_MS)
   {
-    sleepNow(); // Make the Arduino go into sleep mode
+    sleepNow();
+    return;
   }
-  delay(2000);
-  Serial.print("carOffTimer: ");
-  Serial.println(carOffTime);
-  carOffTime += 2; // Increment the car off timer (s)
+
+  static unsigned long lastPrint = 0;
+  if (millis() - lastPrint >= 2000)
+  {
+    lastPrint = millis();
+    Serial.print(F("carOffTimer (s): "));
+    Serial.println(elapsed / 1000UL);
+  }
 }
 
 /*
- * Restore the previous tilt position if any
+ * After re-opening, restore any tilt level the user had set previously.
  */
 void restorePosition()
 {
   for (int i = 0; i < tiltLevel; i++)
-  { // Tilt to previous desired level if any
+  {
     delay(BUTTONDELAY);
     operateHood(CLOSE, true);
   }
 }
 
 /*
- * Operate the navigation hood by driving the motor
- *
- * Args:
- *    dir: A boolean determining the direction to drive the hood (OPEN or CLOSE)
- *    tilt: A boolean flag to signify if we only want to tilt the hood
+ * Drive the hood motor.
+ *   dir:  OPEN or CLOSE (ignored when tilt == true)
+ *   tilt: true performs a single tilt step
  */
 void operateHood(bool dir, bool tilt)
 {
   if (tilt)
-  { // If we only want to tilt the hood, dir is ignored
-    Serial.println("TILT");
-    digitalWrite(MOTORDIR, LOW);     // Set motor drive direction to close
-    digitalWrite(MOTORENABLE, HIGH); // Enable the motor
-    delay(TILTDURATION);             // Keep motor running for TILTDURATION
-    digitalWrite(MOTORENABLE, LOW);  // Stop the motor
-  }
-  else if (dir)
   {
-    // If direction is OPEN
-    String debugString = "Opening hood, potentiometer: ";
-    Serial.println(debugString + analogRead(A5));
-    digitalWrite(MOTORDIRBACK, LOW);
-    digitalWrite(MOTORDIR, HIGH);    // Set motor drive direction to open
-    digitalWrite(MOTORENABLE, HIGH); // Enable the motor
-    while (analogRead(A5) > HOODOPENEDVALUE && motorRunTime < 35)
-    { // Run until we're fully open. If it's run for over 3s stop
-      delay(100);
-      motorRunTime++;
-    }
-    digitalWrite(MOTORENABLE, LOW); // Stop the motor
-    motorRunTime = 0;
+    Serial.println(F("TILT"));
+    digitalWrite(MOTORDIR,     LOW);   // IN1 = L
+    digitalWrite(MOTORDIRBACK, HIGH);  // IN2 = H -> reverse (close direction)
+    delay(TILTDURATION);
+    digitalWrite(MOTORDIRBACK, LOW);   // both LOW -> coast
+    return;
+  }
+
+  if (dir == OPEN)
+  {
+    Serial.print(F("Opening hood, potentiometer: "));
+    Serial.println(analogRead(HOODPOSPIN));
+    digitalWrite(MOTORDIRBACK, LOW);   // IN2 = L
+    digitalWrite(MOTORDIR,     HIGH);  // IN1 = H -> forward
+    runMotorUntil(true);
+    digitalWrite(MOTORDIR, LOW);       // both LOW -> coast
     currentHoodStatus = HOODOPENED;
-    Serial.println("Done: Hood Open");
+    Serial.println(F("Done: Hood Open"));
   }
   else
-  { // If direction is CLOSE
-    String debugString = "Closing hood, potentiometer: ";
-    Serial.println(debugString + analogRead(A5));
-    digitalWrite(MOTORDIR, LOW); // Set motor drive direction to close
-    digitalWrite(MOTORDIRBACK, HIGH);
-    digitalWrite(MOTORENABLE, HIGH); // Enable the motor
-    while (analogRead(A5) < HOODCLOSEDVALUE && motorRunTime < 35)
-    { // Run until we're fully closed. If it's run for over 3s stop
-      delay(100);
-      motorRunTime++;
-    }
-    digitalWrite(MOTORENABLE, LOW); // Stop the motor
-    motorRunTime = 0;
+  {
+    Serial.print(F("Closing hood, potentiometer: "));
+    Serial.println(analogRead(HOODPOSPIN));
+    digitalWrite(MOTORDIR,     LOW);   // IN1 = L
+    digitalWrite(MOTORDIRBACK, HIGH);  // IN2 = H -> reverse
+    runMotorUntil(false);
+    digitalWrite(MOTORDIRBACK, LOW);   // both LOW -> coast
     currentHoodStatus = HOODCLOSED;
-    Serial.println("Done: Hood Close");
+    Serial.println(F("Done: Hood Close"));
   }
 }
 
 /*
- * Setup an interrupt and enter sleep mode
+ * Hold the motor on until the hood reaches its endpoint or the watchdog fires.
+ *   opening: true waits for pot to drop past HOODOPENEDVALUE,
+ *            false waits for pot to rise past HOODCLOSEDVALUE.
+ */
+void runMotorUntil(bool opening)
+{
+  int elapsed = 0;
+  while (elapsed < MOTOR_TIMEOUT_MS)
+  {
+    int pos = analogRead(HOODPOSPIN);
+    if (opening ? (pos <= HOODOPENEDVALUE) : (pos >= HOODCLOSEDVALUE)) return;
+    delay(MOTOR_POLL_MS);
+    elapsed += MOTOR_POLL_MS;
+  }
+}
+
+/*
+ * Busy-wait until ACC has held the requested level continuously for `windowMs`.
+ * Returns false the moment the level breaks, so callers don't burn the full
+ * window on a glitch.
+ */
+bool accStableFor(uint8_t level, unsigned long windowMs)
+{
+  const unsigned long start = millis();
+  while (millis() - start < windowMs)
+  {
+    if (digitalRead(ACCPIN) != level) return false;
+  }
+  return true;
+}
+
+/*
+ * Power down the MCU. Uses pin-change interrupt (PCINT18 = D2) instead of INT0
+ * because INT0 in SLEEP_MODE_PWR_DOWN can only wake on level-LOW, which would
+ * fire instantly (ACC is LOW when we sleep). PCINT wakes on any edge, so any
+ * change to ACC brings the chip back; loop() then re-evaluates the state.
  */
 void sleepNow()
 {
-  Serial.println("Entering sleep mode");
+  Serial.println(F("Entering sleep mode"));
+  Serial.flush();              // UART clocks halt in PWR_DOWN
   digitalWrite(BTNENABLE, LOW);
   delay(100);
-  set_sleep_mode(SLEEP_MODE_PWR_DOWN); // Set type of sleep mode
-  sleep_enable();                      // Enable sleep mode
-  attachInterrupt(0, wakeUp, HIGH);    // Use interrupt 0 (pin 2 ie. ACC input to wake device)
-  sleep_mode();                        // Put device to sleep
-  sleep_disable();                     // Execution resumes from here after waking up
-  detachInterrupt(0);
+
+  set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+  cli();
+  sleep_enable();
+  PCMSK2 |= (1 << PCINT18);    // Watch D2 for changes
+  PCIFR  |= (1 << PCIF2);      // Clear any latched flag
+  PCICR  |= (1 << PCIE2);      // Enable PCINT2 group
+  sei();
+  sleep_cpu();
+  // --- resumes here on wake ---
+  sleep_disable();
+  PCICR  &= ~(1 << PCIE2);
+  PCMSK2 &= ~(1 << PCINT18);
+
   delay(100);
-  Serial.println("Resuming from Sleep");
-  digitalWrite(BTNENABLE, HIGH); // Enable the buttons and illumination
+  Serial.println(F("Resuming from Sleep"));
+  digitalWrite(BTNENABLE, HIGH);
 }
 
 /*
- * The wakeUp() interrupt service routine will run when we get input from ACC (pin 2)
- * Since we just want the device to wake up we do nothing here
+ * Pin-change ISR for PORTD (covers D0-D7, but only D2 is unmasked above).
+ * Empty: we only need the MCU to exit sleep; loop() handles the rest.
  */
-void wakeUp()
-{
-}
+ISR(PCINT2_vect) {}
