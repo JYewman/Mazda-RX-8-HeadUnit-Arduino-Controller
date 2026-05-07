@@ -304,7 +304,9 @@ void sleepNow()
 }
 
 /*
- * Pin-change ISR for PORTD (covers D0-D7, but only D2 is unmasked above).
- * Empty: we only need the MCU to exit sleep; loop() handles the rest.
+ * Pin-change ISR for PORTD. We only need the MCU to exit sleep — loop()
+ * handles the rest — so use EMPTY_INTERRUPT (just a bare `reti` in asm,
+ * no C prologue/epilogue). This also sidesteps an LTO inliner pathology
+ * in AVR-GCC 7.3 that hangs on `ISR(...) {}` with surrounding register code.
  */
-ISR(PCINT2_vect) {}
+EMPTY_INTERRUPT(PCINT2_vect);

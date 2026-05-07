@@ -14,7 +14,6 @@ the Raspberry Pi head unit.
 | Electrolytic cap, **220 µF / 35 V** | Bulk decoupling at the DRV8871 VM input |
 | Ceramic cap, **100 nF** | High-frequency decoupling beside the bulk cap |
 | Resistor, **10 kΩ** | Pull-down on the ACC sense line (D2 → GND) |
-| Resistor, **1 kΩ** (optional) | Series resistor on the ACC line for ESD protection |
 | Push buttons × 2 | Open/close, Tilt (illuminated, switched via BTNENABLE) |
 | 10 kΩ linear pot, mechanically linked to hood | Position feedback (already in the OEM mechanism) |
 
@@ -24,7 +23,7 @@ These match the constants in [RX8_SN_CTRL.ino](RX8_SN_CTRL/RX8_SN_CTRL.ino):
 
 | Pro Mini pin | Code constant | Wired to | Purpose |
 | --- | --- | --- | --- |
-| D2 | `ACCPIN` | RPi 5 V ACC line (via 1 kΩ + 10 kΩ pull-down) | Wakes MCU from sleep on ACC change |
+| D2 | `ACCPIN` | RPi 5 V ACC line + 10 kΩ pull-down to GND | Wakes MCU from sleep on ACC change |
 | D4 | `TILTPIN` | Tilt button (other side → BTNENABLE) | Active-low, internal pull-up |
 | D6 | `OPENPIN` | Open/close button (other side → BTNENABLE) | Active-low, internal pull-up |
 | D10 | `MOTORDIRBACK` | DRV8871 **IN2** | Motor direction line B |
@@ -54,8 +53,8 @@ D3 is **unused** (formerly `MOTORENABLE` — DRV8871 has no enable pin).
                               ├── Buck input/output GND (same node internally)
                               └── RPi GND (so the ACC signal shares a reference)
 
-  RPi 5 V (ACC) ──── 1 kΩ ── D2 ─── 10 kΩ ── GND
-                                   (Pro Mini input, pull-down)
+  RPi 5 V (ACC) ──── D2 ──── 10 kΩ ──── GND
+                          (Pro Mini input, pull-down)
 ```
 
 Key points:
@@ -115,14 +114,13 @@ does nothing.
 
 ## ACC sense input (D2)
 
-This is the line that wakes the MCU from sleep. It needs three things:
+This is the line that wakes the MCU from sleep. It needs two things:
 
-1. **Series resistor (1 kΩ)** between the RPi 5 V rail and D2 — ESD/spike
-   protection in case the RPi briefly outputs something nasty during boot.
-2. **Pull-down (10 kΩ)** between D2 and GND — when the RPi is unpowered
+1. **Pull-down (10 kΩ)** between D2 and GND — when the RPi is unpowered
    (car off), the line is otherwise floating and PCINT will false-wake on
-   noise.
-3. **Common ground with the RPi** — without it the "5 V" from the RPi has
+   noise. The ATmega328P has no internal pull-down (only pull-up), so
+   this has to be external.
+2. **Common ground with the RPi** — without it the "5 V" from the RPi has
    no defined relationship to the Pro Mini's logic reference.
 
 ## Star ground
@@ -185,7 +183,7 @@ Before the first power-up:
 - [ ] Buck output goes to **Pro Mini VCC**, never RAW
 - [ ] All grounds meet at one chassis bolt (motor return on its own thick wire)
 - [ ] 10 kΩ pull-down installed between D2 and GND
-- [ ] 1 kΩ series resistor between RPi ACC line and D2
+- [ ] Tap point verified with a multimeter as 5 V (ACC on) / 0 V (ACC off) before connecting to D2
 - [ ] DRV8871 "VM" header pin **not** connected
 - [ ] Bulk cap (220 µF) and 100 nF ceramic close to DRV8871 Power +
 - [ ] Power LED removed from the Pro Mini
