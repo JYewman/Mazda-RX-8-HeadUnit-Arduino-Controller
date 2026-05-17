@@ -24,6 +24,7 @@ and future functionality.
 | --- | --- |
 | [RX8_SN_CTRL/](RX8_SN_CTRL/) | SatNav hood controller — drives the motor for open / close / tilt, sleeps when ACC is off |
 | [RX8_HU_CTRL/](RX8_HU_CTRL/) | Head-unit companion — auxiliary audio input switching and custom LCD text |
+| [RX8_POT_TEST/](RX8_POT_TEST/) | One-off test sketch — prints the hood-position pot reading every 3 ms so you can calibrate the controller before flashing the main firmware |
 | [WIRING.md](WIRING.md) | Full wiring guide for the SatNav hood controller |
 
 ## Getting started
@@ -63,6 +64,36 @@ the FTDI's voltage jumper to **5 V**). In the Arduino IDE:
 Open the Serial Monitor at 9600 baud to see the controller's debug output.
 The full FTDI hookup table is in
 [WIRING.md → Programming the Pro Mini](WIRING.md#programming-the-pro-mini).
+
+### Calibrating the hood-position potentiometer
+
+The OEM hood mechanism includes a position potentiometer that the
+controller reads via `A5` to know when to stop the motor at each end of travel. The exact ADC values vary per specimen — pot tolerance, mechanical mounting, slight differences in VCC, age. **The defaults shipped in [RX8_SN_CTRL.ino](RX8_SN_CTRL/RX8_SN_CTRL.ino) are calibrated to one specific car — your numbers will almost certainly be different.**
+Calibrate before flashing the main controller, otherwise the motor will rely on its 3.5 s watchdog to stop at each end (works, but slams the mechanism into its mechanical limits every time).
+
+Procedure:
+
+1. Wire the pot per [WIRING.md](WIRING.md): wiper → A5, the two endpoints
+   to VCC and GND (either way round).
+2. Open and upload
+   [RX8_POT_TEST/RX8_POT_TEST.ino](RX8_POT_TEST/RX8_POT_TEST.ino).
+3. Open Serial Monitor at **115200 baud**.
+4. Manually move the hood from fully closed to fully open and back a couple of times. Watch the running `min` and `max` until they settle.
+5. Note the two extremes — call them `OPEN_VAL` and `CLOSED_VAL`. One will be lower than the other.
+
+If `OPEN_VAL > CLOSED_VAL`, swap the two endpoint wires on the pot
+(VCC ↔ GND) so the open reading is lower than the closed reading — the main sketch expects that polarity.
+
+Then update three constants near the top of
+[RX8_SN_CTRL.ino](RX8_SN_CTRL/RX8_SN_CTRL.ino):
+
+```cpp
+const int HOODOPENEDVALUE  = OPEN_VAL + 5;     // a few counts inside the mechanical limit
+const int HOODCLOSEDVALUE  = CLOSED_VAL - 5;
+const int HOODPOSTOLERANCE = (CLOSED_VAL - OPEN_VAL) / 10;   // ~10 % of operating span
+```
+
+The `+5` / `-5` margin gives the watchdog a clean stop just before the end stop instead of slamming into it. `HOODPOSTOLERANCE` defines the dead-zone around the closed value used to decide "is the hood currently closed?" — keeping it at ~10 % of your operating span is a sensible default. Flash the main sketch and the controller should now stop cleanly at each end on the pot reading, not on the watchdog.
 
 ### Power and sleep behaviour
 

@@ -25,17 +25,17 @@ const bool HOODCLOSED = false;
 const uint8_t ACCPIN       = 2;   // ACC input (ignition accessory line, PCINT18)
 const uint8_t TILTPIN      = 4;   // Tilt button
 const uint8_t OPENPIN      = 6;   // Open/close button
-const uint8_t MOTORDIRBACK = 10;  // DRV8871 IN2
+const uint8_t MOTORDIRBACK = 12;  // DRV8871 IN2
 const uint8_t BTNENABLE    = 11;  // Button enable + illumination
-const uint8_t MOTORDIR     = 12;  // DRV8871 IN1
+const uint8_t MOTORDIR     = 10;  // DRV8871 IN1
 const uint8_t HOODPOSPIN   = A5;  // Hood-position potentiometer
 
 /*
  * Tunables
  */
-const int HOODOPENEDVALUE  = 200;  // Pot reading at fully open
-const int HOODCLOSEDVALUE  = 910;  // Pot reading at fully closed
-const int HOODPOSTOLERANCE = 10;   // Pot reading tolerance
+const int HOODOPENEDVALUE  = 975;   // Pot reading at fully open (mechanical: 970)
+const int HOODCLOSEDVALUE  = 1008;  // Pot reading at fully closed (mechanical: 1013)
+const int HOODPOSTOLERANCE = 5;     // Pot reading tolerance — small because operational span is only ~43 counts
 const int TILTDURATION     = 15;   // Motor run-time per tilt step (ms)
 const int BUTTONDELAY      = 400;  // Min time between button presses (ms)
 const int MAXTILT          = 2;    // Max tilt level
