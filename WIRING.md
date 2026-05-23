@@ -173,6 +173,29 @@ wait for the off-timer to expire.
 | ~3 mA | Power LED still in circuit |
 | > 5 mA | Not actually sleeping — check that the off-timer fired and `sleepNow()` was reached |
 
+## Whole-system current at the 12 V input
+
+The table above is the **per-Pro Mini** number — what you'd measure at the
+chip's VCC with everything else disconnected. What the **car battery
+actually sees**, with the buck converter in the loop, is different:
+
+- **~25–35 mA** at idle (ACC off, Pro Mini sleeping), dominated entirely
+  by the CPT buck converter's no-load quiescent draw.
+- The Pro Mini and DRV8871 combined contribute essentially nothing at
+  this scale (~15 µA total). If the system-side reading is healthy but
+  you suspect the Pro Mini isn't sleeping, fall back to the per-Pro Mini
+  diagnostic above.
+
+To measure: multimeter in series on the +12 V feed into the buck
+converter, ACC held LOW (or disconnected from D2), and wait out the
+sleep timer.
+
+Sanity check on battery life: 30 mA × 24 h ≈ 720 mAh/day. A healthy
+60 Ah RX-8 battery has roughly 30 Ah of usable depth-of-discharge before
+risking start failures, so a weekly-driven car never sees the bottom of
+it. Cars that sit unused for weeks at a time should be on a trickle
+charger regardless of this controller.
+
 ## Pre-flight checklist
 
 Before the first power-up:

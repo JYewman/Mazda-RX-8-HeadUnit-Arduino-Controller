@@ -25,18 +25,18 @@ const bool HOODCLOSED = false;
 const uint8_t ACCPIN       = 2;   // ACC input (ignition accessory line, PCINT18)
 const uint8_t TILTPIN      = 4;   // Tilt button
 const uint8_t OPENPIN      = 6;   // Open/close button
-const uint8_t MOTORDIRBACK = 12;  // DRV8871 IN2
+const uint8_t MOTORDIRBACK = 10;  // DRV8871 IN2
 const uint8_t BTNENABLE    = 11;  // Button enable + illumination
-const uint8_t MOTORDIR     = 10;  // DRV8871 IN1
+const uint8_t MOTORDIR     = 12;  // DRV8871 IN1
 const uint8_t HOODPOSPIN   = A5;  // Hood-position potentiometer
 
 /*
  * Tunables
  */
-const int HOODOPENEDVALUE  = 975;   // Pot reading at fully open (mechanical: 970)
-const int HOODCLOSEDVALUE  = 1008;  // Pot reading at fully closed (mechanical: 1013)
-const int HOODPOSTOLERANCE = 5;     // Pot reading tolerance — small because operational span is only ~43 counts
-const int TILTDURATION     = 15;   // Motor run-time per tilt step (ms)
+const int HOODOPENEDVALUE  = 980;   // Below lowest observed reading (~982) — watchdog drives motor into mechanical stop
+const int HOODCLOSEDVALUE  = 1017;  // Above mechanical max (~1015) — same pattern, watchdog handles close
+const int HOODPOSTOLERANCE = 3;     // Pot reading tolerance — small because operational span is only ~29 counts
+const int TILTDURATION     = 150;  // Motor run-time per tilt step (ms)
 const int BUTTONDELAY      = 400;  // Min time between button presses (ms)
 const int MAXTILT          = 2;    // Max tilt level
 
@@ -44,6 +44,7 @@ const unsigned long ACCDETECTDELAY     = 5000UL;   // ACC must be stable this lo
 const unsigned long SLEEP_AFTER_OFF_MS = 50000UL;  // Time after car-off before MCU sleeps (ms)
 const int           MOTOR_TIMEOUT_MS   = 3500;     // Motor watchdog (ms)
 const int           MOTOR_POLL_MS      = 100;      // Pot poll interval while motor runs (ms)
+const int           BRAKE_DURATION_MS  = 50;      // Active brake hold after each motor stop (ms)
 
 /*
  * State
@@ -73,6 +74,11 @@ void setup()
 
 void loop()
 {
+  // Mirror ACC straight onto BTNENABLE: buttons (and their LED illumination)
+  // are live only while ACC is HIGH. The moment ACC drops, the buttons go
+  // dead — no waiting for the off-timer to expire.
+  digitalWrite(BTNENABLE, digitalRead(ACCPIN));
+
   if (digitalRead(ACCPIN) == HIGH)
   {
     checkResume();
@@ -212,7 +218,7 @@ void operateHood(bool dir, bool tilt)
     digitalWrite(MOTORDIR,     LOW);   // IN1 = L
     digitalWrite(MOTORDIRBACK, HIGH);  // IN2 = H -> reverse (close direction)
     delay(TILTDURATION);
-    digitalWrite(MOTORDIRBACK, LOW);   // both LOW -> coast
+    motorBrake();
     return;
   }
 
@@ -223,7 +229,7 @@ void operateHood(bool dir, bool tilt)
     digitalWrite(MOTORDIRBACK, LOW);   // IN2 = L
     digitalWrite(MOTORDIR,     HIGH);  // IN1 = H -> forward
     runMotorUntil(true);
-    digitalWrite(MOTORDIR, LOW);       // both LOW -> coast
+    motorBrake();
     currentHoodStatus = HOODOPENED;
     Serial.println(F("Done: Hood Open"));
   }
@@ -234,10 +240,26 @@ void operateHood(bool dir, bool tilt)
     digitalWrite(MOTORDIR,     LOW);   // IN1 = L
     digitalWrite(MOTORDIRBACK, HIGH);  // IN2 = H -> reverse
     runMotorUntil(false);
-    digitalWrite(MOTORDIRBACK, LOW);   // both LOW -> coast
+    motorBrake();
     currentHoodStatus = HOODCLOSED;
     Serial.println(F("Done: Hood Close"));
   }
+}
+
+/*
+ * Active dynamic brake, then release to coast. Both IN1/IN2 HIGH shorts the
+ * motor terminals through the DRV8871's low-side FETs so the rotor's kinetic
+ * energy dumps into the windings as heat instead of bouncing the mechanism
+ * back. After BRAKE_DURATION_MS, release to coast (both LOW) so no FETs are
+ * left energised while idle.
+ */
+void motorBrake()
+{
+  digitalWrite(MOTORDIR,     HIGH);
+  digitalWrite(MOTORDIRBACK, HIGH);
+  delay(BRAKE_DURATION_MS);
+  digitalWrite(MOTORDIR,     LOW);
+  digitalWrite(MOTORDIRBACK, LOW);
 }
 
 /*
@@ -282,8 +304,6 @@ void sleepNow()
 {
   Serial.println(F("Entering sleep mode"));
   Serial.flush();              // UART clocks halt in PWR_DOWN
-  digitalWrite(BTNENABLE, LOW);
-  delay(100);
 
   set_sleep_mode(SLEEP_MODE_PWR_DOWN);
   cli();
@@ -298,9 +318,7 @@ void sleepNow()
   PCICR  &= ~(1 << PCIE2);
   PCMSK2 &= ~(1 << PCINT18);
 
-  delay(100);
   Serial.println(F("Resuming from Sleep"));
-  digitalWrite(BTNENABLE, HIGH);
 }
 
 /*
