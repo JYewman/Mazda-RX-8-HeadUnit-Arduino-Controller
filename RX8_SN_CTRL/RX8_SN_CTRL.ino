@@ -33,8 +33,8 @@ const uint8_t HOODPOSPIN   = A5;  // Hood-position potentiometer
 /*
  * Tunables
  */
-const int HOODOPENEDVALUE  = 980;   // Below lowest observed reading (~982) — watchdog drives motor into mechanical stop
-const int HOODCLOSEDVALUE  = 1017;  // Above mechanical max (~1015) — same pattern, watchdog handles close
+const int HOODOPENEDVALUE  = 950;   // Below lowest observed reading (~982) — watchdog drives motor into mechanical stop
+const int HOODCLOSEDVALUE  = 1009;  // Above mechanical max (~1015) — same pattern, watchdog handles close
 const int HOODPOSTOLERANCE = 3;     // Pot reading tolerance — small because operational span is only ~29 counts
 const int TILTDURATION     = 150;  // Motor run-time per tilt step (ms)
 const int BUTTONDELAY      = 400;  // Min time between button presses (ms)
